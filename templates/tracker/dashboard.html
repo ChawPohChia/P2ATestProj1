@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Singapore weather sentiment</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+  <style>
+    :root { font-family: system-ui, sans-serif; color: #1a1a1a; background: #f6f7fb; }
+    body { margin: 0; padding: 1.5rem; max-width: 1100px; margin-inline: auto; }
+    h1 { font-size: 1.35rem; margin-top: 0; }
+    .note { font-size: 0.9rem; color: #444; margin-bottom: 1.25rem; line-height: 1.5; }
+    .grid { display: grid; gap: 1.25rem; grid-template-columns: 1fr; }
+    @media (min-width: 800px) { .grid { grid-template-columns: 1fr 1fr; } }
+    .card { background: #fff; border-radius: 10px; padding: 1rem 1rem 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .card h2 { font-size: 1.05rem; margin: 0 0 0.5rem; }
+    .meta { font-size: 0.8rem; color: #666; margin-bottom: 0.75rem; }
+    canvas { max-height: 280px; }
+  </style>
+</head>
+<body>
+  <h1>Singapore weather — post sentiment</h1>
+  <p class="note">
+    <!-- Time windows: rolling 1h and 24h by analyzed_at in Django TIME_ZONE -->
+    Charts count posts with a completed LLM score where <code>analyzed_at</code> falls in the
+    rolling last <strong>1 hour</strong> or <strong>24 hours</strong> (server clock, timezone
+    <code>{{ now.tzinfo }}</code>). Buckets are integer scores 0 (unhappy) … 4 (neutral) … 9 (extremely happy).
+    Totals: last hour {{ hour_total }}, last 24h {{ day_total }}.
+    Ingestion is intended to run about every <strong>{{ ingest_interval_minutes }}</strong> minutes (see <code>INGEST_INTERVAL_MINUTES</code> / your cron or Task Scheduler job).
+  </p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Last 1 hour</h2>
+      <div class="meta">Window: {{ hour_start|date:"Y-m-d H:i:s O" }} → {{ now|date:"Y-m-d H:i:s O" }}</div>
+      <canvas id="chartHour" aria-label="Sentiment histogram last hour"></canvas>
+    </div>
+    <div class="card">
+      <h2>Last 24 hours</h2>
+      <div class="meta">Window: {{ day_start|date:"Y-m-d H:i:s O" }} → {{ now|date:"Y-m-d H:i:s O" }}</div>
+      <canvas id="chartDay" aria-label="Sentiment histogram last 24 hours"></canvas>
+    </div>
+  </div>
+
+  {{ hour_counts|json_script:"hour-counts-data" }}
+  {{ day_counts|json_script:"day-counts-data" }}
+
+  <script>
+    const labels = ["0","1","2","3","4","5","6","7","8","9"];
+    const hourData = JSON.parse(document.getElementById("hour-counts-data").textContent);
+    const dayData = JSON.parse(document.getElementById("day-counts-data").textContent);
+
+    function barChart(canvasId, data, title) {
+      const ctx = document.getElementById(canvasId);
+      return new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{
+            label: "Posts",
+            data,
+            backgroundColor: "rgba(54, 162, 235, 0.6)",
+            borderColor: "rgba(54, 162, 235, 1)",
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            title: { display: false }
+          },
+          scales: {
+            y: { beginAtZero: true, ticks: { precision: 0 } }
+          }
+        }
+      });
+    }
+
+    barChart("chartHour", hourData);
+    barChart("chartDay", dayData);
+  </script>
+</body>
+</html>
